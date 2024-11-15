@@ -1,9 +1,10 @@
 import sys
 import subprocess
-import nmap
+from nmap import PortScanner
 from mac_vendor_lookup import MacLookup, MacNotFoundError
 
 def check_dependencies():
+
     required_modules = ["python-nmap", "mac-vendor-lookup"]
     missing_modules = []
 
@@ -14,7 +15,7 @@ def check_dependencies():
             missing_modules.append(module)
 
     if missing_modules:
-        print("The following required modules are missing:")
+        print("\nThe following required modules are missing:")
         for module in missing_modules:
             print(f"- {module}")
         print("\nTo install them, run:")
@@ -22,10 +23,10 @@ def check_dependencies():
         sys.exit(1)
 
 def classify_device(mac):
-    """Classify a device based on its MAC vendor."""
     try:
         vendor = MacLookup().lookup(mac)
         vendor_lower = vendor.lower()
+
         if "camera" in vendor_lower:
             return "Camera"
         elif "router" in vendor_lower or "network" in vendor_lower:
@@ -38,14 +39,15 @@ def classify_device(mac):
             return f"Unknown device (Vendor: {vendor})"
     except MacNotFoundError:
         return "Unknown vendor/device"
+    except Exception as e:
+        return f"Error classifying device: {e}"
 
 def scan_network(network_range):
-    """Perform an Nmap scan and analyze results."""
-    scanner = nmap.PortScanner()
-    print(f"Scanning the network: {network_range}...")
+    scanner = PortScanner()
+    print(f"\nScanning the network: {network_range}...")
 
     try:
-        scanner.scan(hosts=network_range, arguments="-sn")  # Ping scan
+        scanner.scan(hosts=network_range, arguments="-sn")
         devices = []
 
         for host in scanner.all_hosts():
@@ -56,21 +58,39 @@ def scan_network(network_range):
         
         return devices
     except Exception as e:
-        print(f"Error during scan: {e}")
+        print(f"\nError during scan: {e}")
         return []
 
-def main():
-    print("Nmap MAC Scanner")
-    network_range = input("Enter the network range (e.g., 192.168.1.0/24): ").strip()
-    devices = scan_network(network_range)
-
+def display_devices(devices):
+    print("\nDiscovered devices:")
     if devices:
-        print("\nDiscovered devices:")
         for ip, mac, device_type in devices:
             print(f"IP: {ip} | MAC: {mac} | Device Type: {device_type}")
     else:
-        print("No devices found or an error occurred.")
+        print("No devices found.")
+
+def main():
+    print("Nmap MAC Scanner")
+    try:
+        print("Updating MAC vendor database...")
+        MacLookup().update_vendors()
+
+        network_range = input("\nEnter the network range (e.g., 192.168.1.0/24): ").strip()
+        if not network_range:
+            raise ValueError("Network range cannot be empty.")
+
+        devices = scan_network(network_range)
+        display_devices(devices)
+
+    except KeyboardInterrupt:
+        print("\nScan interrupted by user. Exiting...")
+    except ValueError as ve:
+        print(f"\nInput error: {ve}")
+    except Exception as e:
+        print(f"\nAn unexpected error occurred: {e}")
+    finally:
+        print("\nProgram terminated.")
 
 if __name__ == "__main__":
-    MacLookup().update_vendors()
+    check_dependencies()
     main()
